@@ -9,3 +9,8 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+_tests/**
+.mypy_cache/**
+.git/**
+.gitignore
+*.vsix

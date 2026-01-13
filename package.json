@@ -1,13 +1,39 @@
 {
   "name": "simple-data-viewer",
-  "displayName": "simple-data-viewer",
-  "description": "",
+  "displayName": "Simple Data Viewer",
+  "description": "View PyTorch tensors, NumPy arrays, and NetworkX graphs during Python debugging sessions with no additional dependencies.",
   "version": "0.0.1",
+  "publisher": "inag-ufscar",
+  "author": {
+    "name": "Cesar Comin"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chcomin/simple-data-viewer"
+  },
+  "bugs": {
+    "url": "https://github.com/chcomin/simple-data-viewer/issues"
+  },
+  "homepage": "https://github.com/chcomin/simple-data-viewer#readme",
+  "keywords": [
+    "python",
+    "pytorch",
+    "numpy",
+    "networkx",
+    "debugger",
+    "visualization",
+    "debug",
+    "data viewer",
+    "tensor",
+    "array"
+  ],
   "engines": {
     "vscode": "^1.107.0"
   },
   "categories": [
-    "Other"
+    "Debuggers",
+    "Visualization"
   ],
   "activationEvents": [],
   "main": "./out/extension.js",

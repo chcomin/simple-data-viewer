@@ -10,8 +10,6 @@ def _vscode_extension_extract_data(variable):
         if 'torch' in type_str and 'Tensor' in type_str:
             variable = variable.detach().cpu().numpy()
         
-        import numpy as np
-        
         # --- 2. DETECT GRAPH TYPES (NetworkX) ---
         is_graph = False
         graph_data = {}
@@ -111,6 +109,8 @@ def _vscode_extension_extract_data(variable):
 
         # Image Detection
         elif hasattr(variable, 'shape'):
+            import numpy as np
+            
             # Standard Image Logic
             if variable.ndim == 3:
                 C, H, W = variable.shape
