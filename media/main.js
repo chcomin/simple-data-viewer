@@ -32,11 +32,17 @@ function routeMessage(msg) {
         else if (msg.type === 'points3d') {
             renderPoints3D(msg);
         } 
-        else if (msg.type === 'graph') {
+        else if (msg.type === 'graph2d') {
             renderGraph(msg);
         } 
         else if (msg.type === 'graph3d') {
             renderGraph3D(msg);
+        }
+        else if (msg.type === 'array1d') {
+            renderArray1D(msg);
+        }
+        else if (msg.type === 'object') {
+            renderObject(msg);
         }
     } catch (e) {
         document.getElementById('status').textContent = "Render Crash: " + e.message;
@@ -160,6 +166,42 @@ function renderPoints3D(msg) {
         paper_bgcolor: "#1e1e1e", font: { color: "#ccc" }
     };
     Plotly.newPlot(plotDiv, [trace], layout, { responsive: true });
+}
+
+function renderArray1D(msg) {
+    const plotDiv = document.getElementById('plot-container');
+    const count = msg.data.length;
+    document.getElementById('status').textContent = `Histogram: ${count} values`;
+
+    const trace = {
+        x: msg.data,
+        type: 'histogram',
+        marker: { color: '#1f77b4' }
+    };
+
+    const layout = {
+        title: 'Data Distribution',
+        margin: { t: 40, l: 40, r: 20, b: 30 },
+        xaxis: { gridcolor: '#444', zerolinecolor: '#666' },
+        yaxis: { gridcolor: '#444', zerolinecolor: '#666' },
+        plot_bgcolor: "#1e1e1e", paper_bgcolor: "#1e1e1e", font: { color: "#ccc" }
+    };
+    Plotly.newPlot(plotDiv, [trace], layout, { responsive: true });
+}
+
+function renderObject(msg) {
+    const plotDiv = document.getElementById('plot-container');
+    document.getElementById('status').textContent = "Object Representation";
+
+    if (typeof Plotly !== 'undefined') {
+        Plotly.purge(plotDiv);
+    }
+
+    plotDiv.innerHTML = '';
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'color: #ccc; padding: 20px; white-space: pre-wrap; font-family: monospace; overflow: auto; height: 100%; box-sizing: border-box; margin: 0;';
+    pre.textContent = msg.data;
+    plotDiv.appendChild(pre);
 }
 
 function renderGraph(msg) { renderGraphCommon(msg, false); }

@@ -2,41 +2,97 @@ import json
 import base64
 import tempfile
 import os
+from dataclasses import is_dataclass, fields
+from typing import Any
 import numpy as np
+
+def is_1d_array(np_array):
+    """Check if a numpy array is 1D."""
+    return np_array.squeeze().ndim == 1
+
+def is_image_array(np_array):
+    """Check if a numpy array is likely an image."""
+    is_image = False
+    if np_array.ndim == 2 and np_array.shape[1] >= 4:
+        # Not a point cloud (Nx2 or Nx3)
+        is_image = True
+    elif np_array.ndim == 3:
+        D0, D1, D2 = np_array.shape
+        if D0 > 4 and D1 > 4 and D2 in [1, 3, 4]:
+            # Channels last
+            is_image = True
+        elif D0 in [1, 3, 4] and D1 > 4 and D2 > 4:
+            # Channels first
+            is_image = True
+    return is_image
+
+def is_point_array(np_array):
+    """Check if a numpy array is likely a point cloud."""
+    return np_array.ndim == 2 and np_array.shape[1] in [2, 3]
+
+def is_tensor_like(variable):
+    """Check if a variable is a PyTorch tensor."""
+    return hasattr(variable, 'cpu') and hasattr(variable, 'detach')
+
+def is_graph_like(variable):
+    """Check if a variable is a NetworkX-like graph."""
+    return hasattr(variable, "nodes") and hasattr(variable, "edges")
+
+def is_plottable_array(variable):
+    """Check if a variable is a numpy array that can be plotted (1D values, point cloud or image)."""
+
+    is_plottable = False
+    try:
+        # Try to convert to numpy array
+        np_array = np.asarray(variable)
+    except (ValueError, TypeError, RuntimeError):
+        pass
+    else:
+        if np_array.dtype != object:
+            np_array = np_array.squeeze()
+            if is_1d_array(np_array) or is_image_array(np_array) or is_point_array(np_array):
+                is_plottable = True
+
+    return is_plottable
 
 def get_data(variable):
     """Get json visualization data from a variable."""
 
-    if hasattr(variable, "nodes") and hasattr(variable, "edges"):
-        # Networkx-like object
+    if is_graph_like(variable):
         return get_graph_data(variable)
-    elif hasattr(variable, 'cpu') and hasattr(variable, 'detach'):
-        # PyTorch Tensor-like object
+    elif is_tensor_like(variable):
         variable = variable.detach().cpu().numpy()
     
-    try:
-        # Try to convert to numpy array
+    is_plottable = is_plottable_array(variable)
+    if is_plottable:
         np_array = np.asarray(variable)
-    except (ValueError, TypeError, RuntimeError) as e:
-        raise TypeError("Cannot convert variable to numpy array.") from e
-    
-    return get_numpy_data(np_array)
+        return get_numpy_data(np_array)
+    else:
+        repr = inspect_object(variable)
+
+        output_data = {
+            "type": "object",
+            "data": repr,
+        }
+
+        return output_data
 
 def get_numpy_data(np_array):
     """Extract visualization data from a numpy array."""
 
+    np_array = np_array.squeeze()
     ndim = np_array.ndim
     shape = np_array.shape
 
-    # if ndim == 1:
-        # TODO: Show 1D array as histogram
-        #output_data = {
-        #    "type": "array1d",
-        #    "data": np_array.tolist(),
-        #    "shape": np_array.shape
-        #}
-    # Assume that the array contains points
-    if ndim == 2 and shape[1] in [2, 3]:
+    if is_1d_array(np_array):
+        # 1D array
+        output_data = {
+            "type": "array1d",
+            "data": np_array.tolist(),
+            "shape": np_array.shape
+        }
+    elif is_point_array(np_array):
+        # Assume that the array contains points
         if shape[1] == 2:
             type = "points"
         elif shape[1] == 3:
@@ -49,7 +105,7 @@ def get_numpy_data(np_array):
         }
 
     # Assume that the array contains an image
-    elif ndim == 2 or ndim == 3:
+    elif is_image_array(np_array):
         if ndim == 2:
             # Insert channel dimension
             np_array = np_array[..., None]
@@ -57,7 +113,7 @@ def get_numpy_data(np_array):
         C, H, W = np_array.shape
         # Heuristic to detect if channel is first
         if C in [1, 3, 4] and H > 4 and W > 4:
-            np_array = np.transpose(np_array, (1, 2, 0)) # type: ignore
+            np_array = np_array.transpose((1, 2, 0)) # type: ignore
     
         # Intensity normalization
 
@@ -126,11 +182,19 @@ def get_graph_data(graph):
                 "the graph layout.") from e
             
         # Limit iterations for speed on large graphs
-        pos = nx.spring_layout(graph, scale=100, iterations=50)
+        pos = nx.spring_layout(graph, scale=100, iterations=50, dim=3)
+
+    if all(len(p) == 3 for p in pos.values()):
+        is_3d = True
+    elif all(len(p) == 2 for p in pos.values()):
+        is_3d = False
+    else:
+        raise ValueError("Node positions must be all 2D or all 3D coordinates.")
 
     # B. Serialize Nodes
     node_x = []
     node_y = []
+    node_z = []
     # Map node ID to index for edge construction
     node_map = {} 
     
@@ -139,33 +203,129 @@ def get_graph_data(graph):
         # Handle 2D or 3D positions (project 3D to 2D for now)
         node_x.append(float(p[0]))
         node_y.append(float(p[1]))
+        if is_3d:
+            node_z.append(float(p[2]))
         node_map[n] = i
 
     # C. Serialize Edges
     edge_x = []
     edge_y = []
-    
+    edge_z = []
     edges = list(graph.edges())
     for u, v in edges:
         if u in node_map and v in node_map:
             x0, y0 = node_x[node_map[u]], node_y[node_map[u]]
             x1, y1 = node_x[node_map[v]], node_y[node_map[v]]
+            if is_3d:
+                z0, z1 = node_z[node_map[u]], node_z[node_map[v]]
             
             # Plotly line segments need 'None' to break the line between edges
             edge_x.extend([x0, x1, None])
             edge_y.extend([y0, y1, None])
+            if is_3d:
+                edge_z.extend([z0, z1, None])
 
     graph_data = {
-        "type": "graph",
+        "type": "graph3d" if is_3d else "graph2d",
         "node_x": node_x,
         "node_y": node_y,
+        "node_z": node_z if is_3d else None,
         "edge_x": edge_x,
         "edge_y": edge_y,
+        "edge_z": edge_z if is_3d else None,
         "num_nodes": len(nodes),
         "num_edges": len(edges)
     }
    
     return graph_data
+
+def inspect_object(obj: Any) -> str:
+    """Public interface to inspect any complex Python object."""
+    return _format_recursive(obj, indent=0)
+
+def _format_recursive(obj: Any, indent: int) -> str:
+    prefix = "  " * indent
+    # Get the full type name (e.g., 'torch.Tensor', 'PIL.Image.Image')
+    obj_type = type(obj)
+    type_str = f"{obj_type.__module__}.{obj_type.__name__}"
+
+    # CASE A: PyTorch Tensor (Detected via type string)
+    if "torch.Tensor" in type_str or type_str == "torch.Tensor":
+        # Access properties dynamically to avoid import errors if torch isn't present
+        shape = list(obj.shape)
+        dt = str(obj.dtype).replace("torch.", "")
+        
+        # Check if pinned (safely)
+        is_pinned = getattr(obj, "is_pinned", lambda: False)()
+        dev = "pinned" if is_pinned else str(obj.device)
+        
+        return f"Tensor{shape} ({dt}, {dev})"
+
+    # CASE B: Numpy Array
+    elif isinstance(obj, np.ndarray):
+        dt = str(obj.dtype)
+        return f"NDArray{list(obj.shape)} ({dt})"
+
+    # CASE C: Pillow Image (Detected via type string)
+    # PIL images often have types like 'PIL.Image.Image' or 'PIL.PngImagePlugin.PngImageFile'
+    elif "PIL." in type_str and "Image" in type_str:
+        # Access attributes dynamically
+        mode = getattr(obj, "mode", "Unknown")
+        size = getattr(obj, "size", "?")
+        fmt = getattr(obj, "format", "RAW")
+        fmt = fmt if fmt else "RAW"
+        return f"PIL.Image (Mode: {mode}, Size: {size}, Format: {fmt})"
+
+    # CASE D: Dictionary
+    elif isinstance(obj, dict):
+        length = len(obj)
+        name = "dict"
+        
+        if length == 0:
+            return f"{name}{{}}"
+            
+        if length <= 4:
+            lines = [f"{name}[{length}]"]
+            for k, v in obj.items():
+                val_str = _format_recursive(v, indent + 1)
+                lines.append(f"{prefix}  '{k}': {val_str}")
+            return "\n".join(lines)
+        else:
+            first_key, first_val = next(iter(obj.items()))
+            header = f"{name}[{length}]"
+            val_str = _format_recursive(first_val, indent + 1)
+            return f"{header} containing:\n{prefix}  '{first_key}': {val_str}\n{prefix}  ... ({length-1} more items)"
+
+    # CASE E: Iterables (List, Tuple)
+    elif isinstance(obj, (list, tuple)):
+        name = type(obj).__name__
+        length = len(obj)
+        
+        if length == 0:
+            return f"{name}[]"
+        
+        if length <= 4:
+            lines = [f"{name}[{length}]"]
+            for i, item in enumerate(obj):
+                val_str = _format_recursive(item, indent + 1)
+                lines.append(f"{prefix}  ({i}): {val_str}")
+            return "\n".join(lines)
+        else:
+            header = f"{name}[{length}]"
+            inner_str = _format_recursive(obj[0], indent + 1)
+            return f"{header} containing:\n{prefix}  (0): {inner_str}\n{prefix}  ... ({length-1} more items)"
+
+    # CASE F: Dataclass
+    elif is_dataclass(obj):
+        lines = [f"{obj.__class__.__name__}"]
+        for field in fields(obj):
+            val = getattr(obj, field.name)
+            val_str = _format_recursive(val, indent + 1)
+            lines.append(f"{prefix}  {field.name}: {val_str}")
+        return "\n".join(lines)
+
+    # CASE G: Primitives / Other
+    return str(type(obj).__name__)
 
 def _vscode_extension_extract_data(variable):
     try:

@@ -1,22 +1,30 @@
 # Simple Data Viewer
 
-A lightweight VS Code extension for visualizing NumPy arrays and PyTorch tensors during Python debugging sessions. It also supports variables that can be converted to a NumPy array (e.g. a list of points) and NetworkX graphs. Networkx, Pytorch or other dependencies are not required!
+A lightweight VS Code extension for visualizing 1D and 2D NumPy arrays and PyTorch tensors during Python debugging sessions. It also supports variables that can be converted to a NumPy array (e.g. a list of points) and NetworkX graphs. Networkx, Pytorch or other dependencies are not required!
 
 ## Features
 
-View 2D and multichannel Pytorch and numpy arrays in the debugger. Right-click on a variable and select "View variable"
+View 1D arrays as histogram
 
-![Image viewer](assets/image.gif)
+![Histogram viewer](assets/histogram.gif)
 
 <br>
 
-View 2D and 3D point clouds
+View 2D (Nx2) and 3D (Nx3) point clouds
 
 ![Points viewer](assets/points.gif)
 
 <br>
 
-You can explore any tensor or array. For instance, an image in a Bx3xHxW array can be shown by first defining the variable in the debug console using `img = batch[7]`. The variable can then be viewed as an image
+
+View 2D and multichannel Pytorch and numpy arrays as images. Pillow images and objects that can be converted to numpy are also supported.
+
+![Image viewer](assets/image.gif)
+
+<br>
+
+
+You can explore any ND tensor or array. For instance, an image in a Bx3xHxW array can be shown by first defining the variable in the debug console using `img = batch[7]`. The variable can then be viewed as an image
 
 ![Batch viewer](assets/batch.gif)
 
@@ -24,7 +32,13 @@ You can explore any tensor or array. For instance, an image in a Bx3xHxW array c
 
 The extension also support viewing Networkx graphs
 
-![Graph viewer](assets/graph.png)
+![Graph viewer](assets/graph.gif)
+
+<br>
+
+Compound data that cannot be plotted is printed with rich information. For instance, a list with a torch tensor on the GPU, a dictionary with an array, a tensor and a pillow image and a list of 10 arrays is shown as
+
+![Data viewer](assets/compound.png)
 
 
 ## Requirements
@@ -56,52 +70,60 @@ code --install-extension simple-data-viewer-0.0.1.vsix
 
 ## Supported Variable Types
 
-The full heuristic for automatically detecting and handling point clouds and images is as follows:
+The full heuristic for automatically detecting and handling each data type is the following:
 
 ```python
-# Detection of PyTorch Tensor-like object (can be on GPU and on computation graph)
-if hasattr(variable, 'cpu') and hasattr(variable, 'detach'):
-    variable = variable.detach().cpu().numpy()
+def is_1d_array(np_array):
+    """Check if a numpy array is 1D."""
+    return np_array.squeeze().ndim == 1
 
-# Conversion of variable to numpy array
-try:
-    np_array = np.asarray(variable)
-...
+def is_point_array(np_array):
+    """Check if a numpy array is likely a point cloud."""
+    return np_array.ndim == 2 and np_array.shape[1] in [2, 3]
 
-ndim = np_array.ndim
-shape = np_array.shape
+def is_image_array(np_array):
+    """Check if a numpy array is likely an image."""
+    is_image = False
+    if np_array.ndim == 2 and np_array.shape[1] >= 4:
+        # Not a point cloud (Nx2 or Nx3)
+        is_image = True
+    elif np_array.ndim == 3:
+        D0, D1, D2 = np_array.shape
+        if D0 > 4 and D1 > 4 and D2 in [1, 3, 4]:
+            # Channels last
+            is_image = True
+        elif D0 in [1, 3, 4] and D1 > 4 and D2 > 4:
+            # Channels first
+            is_image = True
+    return is_image
 
-# Point cloud detection
-if ndim == 2 and shape[1] in [2, 3]:
-    if shape[1] == 2:
-        type = "points"
-    elif shape[1] == 3:
-        type = "points3d"
+def is_tensor_like(variable):
+    """Check if a variable behaves like a Pytorch tensor."""
+    return hasattr(variable, 'cpu') and hasattr(variable, 'detach')   
 
-# Image handling
-elif ndim == 2 or ndim == 3:
-    # Insert channel dimension if ndim == 2
-    # ...
+def is_graph_like(variable):
+    """Check if a variable has the attributes nodes and edges."""
+    return hasattr(variable, "nodes") and hasattr(variable, "edges")
 
-    C, H, W = np_array.shape
-    # Heuristic to detect if channel is first
-    if C in [1, 3, 4] and H > 4 and W > 4:
-        np_array = np.transpose(np_array, (1, 2, 0)) 
+### Array intensity normalization for showing as image ###
 
-    # If integer with range outside [0, 255], the array requires normalization
-    if np_array.dtype.kind == 'i' and (np_array.max() > 255 or np_array.min() < 0):
-        np_array = np_array.astype(np.float32)
+# If integer with range outside [0, 255], the array requires normalization
+if np_array.dtype.kind == 'i' and (np_array.max() > 255 or np_array.min() < 0):
+    np_array = np_array.astype(np.float32)
 
-    # If float, normalize to [0, 255]
-    if np_array.dtype.kind == 'f':
-        ...
+# If float, normalize to [0, 255]
+if np_array.dtype.kind == 'f':
+    ...
 ```
 
-## Future plans
-
-- Visualize 1D array as histogram
-
 ## Release Notes
+
+### 0.0.2
+
+Second release
+
+- View 1D arrays as histogram
+- View complex nested lists as a string with rich information
 
 ### 0.0.1
 

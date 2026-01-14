@@ -12,5 +12,15 @@ vsc-extension-quickstart.md
 _tests/**
 .mypy_cache/**
 .git/**
-.gitignore
 *.vsix
+
+__pycache__/
+_tests/
+.mypy_cache/
+assets/
+dist/
+node_modules/
+.vscode-test/
+release/
+PUBLISHING.md
+

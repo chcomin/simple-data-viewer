@@ -5,3 +5,4 @@ node_modules/
 _tests/
 PUBLISHING.md
 .mypy_cache/
+__pycache__/
