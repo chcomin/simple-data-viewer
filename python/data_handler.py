@@ -4,7 +4,17 @@ import tempfile
 import os
 from dataclasses import is_dataclass, fields
 from typing import Any
-import numpy as np
+
+# Numpy is imported here because it is used on three functions. But it is only
+# required if a numpy array was passed to the script, in which case the user
+# has numpy installed.
+try:
+    import numpy as np
+except ImportError:
+    _has_numpy = False
+else:
+    _has_numpy = True
+
 
 def is_1d_array(np_array):
     """Check if a numpy array is 1D."""
@@ -30,9 +40,13 @@ def is_point_array(np_array):
     """Check if a numpy array is likely a point cloud."""
     return np_array.ndim == 2 and np_array.shape[1] in [2, 3]
 
-def is_tensor_like(variable):
+def is_tensor_like_pytorch(variable):
     """Check if a variable is a PyTorch tensor."""
     return hasattr(variable, 'cpu') and hasattr(variable, 'detach')
+
+def is_tensor_like_tensorflow(variable):
+    """Check if a variable is a TensorFlow tensor."""
+    return hasattr(variable, 'numpy')
 
 def is_graph_like(variable):
     """Check if a variable is a NetworkX-like graph."""
@@ -41,11 +55,14 @@ def is_graph_like(variable):
 def is_plottable_array(variable):
     """Check if a variable is a numpy array that can be plotted (1D values, point cloud or image)."""
 
+    if not _has_numpy:
+        return False
+
     is_plottable = False
     try:
         # Try to convert to numpy array
         np_array = np.asarray(variable)
-    except (ValueError, TypeError, RuntimeError):
+    except (ValueError, TypeError, RuntimeError, NameError):
         pass
     else:
         if np_array.dtype != object:
@@ -60,11 +77,13 @@ def get_data(variable):
 
     if is_graph_like(variable):
         return get_graph_data(variable)
-    elif is_tensor_like(variable):
+    elif is_tensor_like_pytorch(variable):
         variable = variable.detach().cpu().numpy()
+    elif is_tensor_like_tensorflow(variable):
+        variable = variable.numpy()
     
     is_plottable = is_plottable_array(variable)
-    if is_plottable:
+    if is_plottable and _has_numpy:
         np_array = np.asarray(variable)
         return get_numpy_data(np_array)
     else:
@@ -86,19 +105,21 @@ def get_numpy_data(np_array):
 
     if is_1d_array(np_array):
         # 1D array
-        # Replace NaNs with zeros to not break JSON serialization
-        data_list = np.where(np.isnan(np_array), 0, np_array).tolist()
+        # Replace NaN and inf with zeros to not break JSON serialization
+        # TODO: Better handling of NaNs and infs?
+        data_list = np.where(~np.isfinite(np_array), 0, np_array).tolist()
         output_data = {
             "type": "array1d",
             "data": data_list,
             "shape": np_array.shape
         }
     elif is_point_array(np_array):
-        # Assume that the array contains points
-        if shape[1] == 2:
-            type = "points"
-        elif shape[1] == 3:
+        # Assume that the array contains points    
+        if shape[1] == 3:
             type = "points3d"
+        else:
+            # Assume 2D points
+            type = "points2d"
 
         output_data = {
             "type": type,
@@ -193,28 +214,27 @@ def get_graph_data(graph):
     else:
         raise ValueError("Node positions must be all 2D or all 3D coordinates.")
 
-    # B. Serialize Nodes
+    # Serialize Nodes
     node_x = []
     node_y = []
     node_z = []
     # Map node ID to index for edge construction
     node_map = {} 
-    
     for i, n in enumerate(nodes):
         p = pos[n]
-        # Handle 2D or 3D positions (project 3D to 2D for now)
         node_x.append(float(p[0]))
         node_y.append(float(p[1]))
         if is_3d:
             node_z.append(float(p[2]))
         node_map[n] = i
 
-    # C. Serialize Edges
+    # Serialize Edges
     edge_x = []
     edge_y = []
     edge_z = []
     edges = list(graph.edges())
-    for u, v in edges:
+    for edge in edges:
+        u, v = edge[0], edge[1]
         if u in node_map and v in node_map:
             x0, y0 = node_x[node_map[u]], node_y[node_map[u]]
             x1, y1 = node_x[node_map[v]], node_y[node_map[v]]
@@ -245,7 +265,12 @@ def inspect_object(obj: Any) -> str:
     """Public interface to inspect any complex Python object."""
     return _format_recursive(obj, indent=0)
 
-def _format_recursive(obj: Any, indent: int) -> str:
+def _format_recursive(obj: Any, indent: int, depth_limit: int = 6) -> str:
+    """Recursively format a complex Python object into a string representation."""
+    
+    if indent > depth_limit:
+        return "..."
+
     prefix = "  " * indent
     # Get the full type name (e.g., 'torch.Tensor', 'PIL.Image.Image')
     obj_type = type(obj)
@@ -264,7 +289,7 @@ def _format_recursive(obj: Any, indent: int) -> str:
         return f"Tensor{shape} ({dt}, {dev})"
 
     # CASE B: Numpy Array
-    elif isinstance(obj, np.ndarray):
+    elif "numpy" in type_str and "ndarray" in type_str:
         dt = str(obj.dtype)
         return f"NDArray{list(obj.shape)} ({dt})"
 

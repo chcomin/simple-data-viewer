@@ -22,32 +22,37 @@ window.addEventListener('message', event => {
 
 // 2. Logic to handle the data once Plotly is ready
 function routeMessage(msg) {
-    try {
-        if (msg.type === 'image') {
-            renderImage(msg);
-        } 
-        else if (msg.type === 'points') {
-            renderPoints(msg);
-        } 
-        else if (msg.type === 'points3d') {
-            renderPoints3D(msg);
-        } 
-        else if (msg.type === 'graph2d') {
-            renderGraph(msg);
-        } 
-        else if (msg.type === 'graph3d') {
-            renderGraph3D(msg);
+
+    document.getElementById('status').textContent = "Rendering...";
+
+    requestAnimationFrame(() => {
+        try {
+            if (msg.type === 'image') {
+                renderImage(msg);
+            } 
+            else if (msg.type === 'points2d') {
+                renderPoints(msg);
+            } 
+            else if (msg.type === 'points3d') {
+                renderPoints3D(msg);
+            } 
+            else if (msg.type === 'graph2d') {
+                renderGraph(msg);
+            } 
+            else if (msg.type === 'graph3d') {
+                renderGraph3D(msg);
+            }
+            else if (msg.type === 'array1d') {
+                renderArray1D(msg);
+            }
+            else if (msg.type === 'object') {
+                renderObject(msg);
+            }
+        } catch (e) {
+            document.getElementById('status').textContent = "Render Crash: " + e.message;
+            console.error(e);
         }
-        else if (msg.type === 'array1d') {
-            renderArray1D(msg);
-        }
-        else if (msg.type === 'object') {
-            renderObject(msg);
-        }
-    } catch (e) {
-        document.getElementById('status').textContent = "Render Crash: " + e.message;
-        console.error(e);
-    }
+    });
 }
 
 // 3. Renderers
@@ -109,10 +114,11 @@ function renderPoints(msg) {
     const count = msg.data.length;
     document.getElementById('status').textContent = `Point Cloud: ${count} points`;
     
-    const x = [], y = [];
+    const x = new Float32Array(count);
+    const y = new Float32Array(count);
     for(let i=0; i<count; i++) {
-        x.push(msg.data[i][0]);
-        y.push(msg.data[i][1]);
+        x[i] = msg.data[i][0];
+        y[i] = msg.data[i][1];
     }
 
     const trace = {
@@ -139,11 +145,13 @@ function renderPoints3D(msg) {
     const count = msg.data.length;
     document.getElementById('status').textContent = `3D Cloud: ${count} points`;
     
-    const x = [], y = [], z = [];
+    const x = new Float32Array(count);
+    const y = new Float32Array(count);
+    const z = new Float32Array(count);
     for(let i=0; i<count; i++) {
-        x.push(msg.data[i][0]);
-        y.push(msg.data[i][1]);
-        z.push(msg.data[i][2]);
+        x[i] = msg.data[i][0];
+        y[i] = msg.data[i][1];
+        z[i] = msg.data[i][2];
     }
 
     const trace = {
@@ -261,6 +269,7 @@ function renderGraphCommon(msg, is3D) {
 
 // 4. Initialization Loop
 // Check every 50ms if Plotly has finished loading from the CDN
+let attempts = 0;
 function checkPlotly() {
     if (typeof Plotly !== 'undefined') {
         isPlotlyLoaded = true;
@@ -272,6 +281,12 @@ function checkPlotly() {
             Plotly.Plots.resize(document.getElementById('plot-container'));
         });
     } else {
+        attempts++;
+        if (attempts > 200) { // 10 seconds timeout
+            document.getElementById('status').textContent = 
+                "Error: Plotly.js failed to load from CDN. Check internet connection.";
+            return;
+        }
         setTimeout(checkPlotly, 50);
     }
 }
