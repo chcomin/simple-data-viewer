@@ -51,13 +51,13 @@
       }
     ],
     "menus": {
-            "debug/variables/context": [
-                {
-                    "command": "python-debug-plotter.plotVariable",
-                    "group": "navigation"
-                }
-            ]
+      "debug/variables/context": [
+        {
+          "command": "python-debug-plotter.plotVariable",
+          "group": "navigation"
         }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -76,5 +76,8 @@
     "eslint": "^9.39.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.52.0"
+  },
+  "dependencies": {
+    "plotly.js": "^3.3.1"
   }
 }

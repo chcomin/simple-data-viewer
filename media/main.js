@@ -2,23 +2,26 @@
 
 const vscode = acquireVsCodeApi();
 let initialData = null; 
-let isPlotlyLoaded = false;
 
-// 1. Listen immediately for data from extension
 window.addEventListener('message', event => {
     const message = event.data;
+    
     if (message.error) {
         document.getElementById('status').textContent = "Error: " + message.error;
         return;
     }
-    
-    if (isPlotlyLoaded) {
-        routeMessage(message);
-    } else {
-        initialData = message;
-        document.getElementById('status').textContent = "Data received. Loading Plotly...";
+
+    // Pass directly to the router
+    routeMessage(message);
+});
+
+window.addEventListener('resize', () => {
+    const plotContainer = document.getElementById('plot-container');
+    if (plotContainer && plotContainer.data) {
+        Plotly.Plots.resize(plotContainer);
     }
 });
+
 
 // 2. Logic to handle the data once Plotly is ready
 function routeMessage(msg) {
@@ -448,27 +451,32 @@ const fmt = (n) => {
   return n.toFixed(3);
 };
 
+
+
 // 4. Initialization Loop
 // Check every 50ms if Plotly has finished loading from the CDN
-let attempts = 0;
-function checkPlotly() {
-    if (typeof Plotly !== 'undefined') {
-        isPlotlyLoaded = true;
-        if (initialData) {
-            routeMessage(initialData);
-            initialData = null;
-        }
-        window.addEventListener('resize', () => {
-            Plotly.Plots.resize(document.getElementById('plot-container'));
-        });
-    } else {
-        attempts++;
-        if (attempts > 200) { // 10 seconds timeout
-            document.getElementById('status').textContent = 
-                "Error: Plotly.js failed to load from CDN. Check internet connection.";
-            return;
-        }
-        setTimeout(checkPlotly, 50);
-    }
-}
-checkPlotly();
+// This function was needed when Plotly was not bundled with the extension.
+// let attempts = 0;
+// function checkPlotly() {
+//     if (typeof Plotly !== 'undefined') {
+//         isPlotlyLoaded = true;
+//         if (initialData) {
+//             routeMessage(initialData);
+//             initialData = null;
+//         }
+//         window.addEventListener('resize', () => {
+//             Plotly.Plots.resize(document.getElementById('plot-container'));
+//         });
+//     } else {
+//         attempts++;
+//         if (attempts > 200) { // 10 seconds timeout
+//             document.getElementById('status').textContent = 
+//                 "Error: Plotly.js failed to load from CDN. Check internet connection.";
+//             return;
+//         }
+//         setTimeout(checkPlotly, 50);
+//     }
+// }
+// checkPlotly();
+
+vscode.postMessage({ command: 'ready' });

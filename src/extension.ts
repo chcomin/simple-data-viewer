@@ -4,6 +4,7 @@ import * as path from 'path';
 import { getWebviewContent } from './webview';
 
 let currentPanel: vscode.WebviewPanel | undefined = undefined;
+let isWebviewReady = false;
 
 export function activate(context: vscode.ExtensionContext) {
 
@@ -60,6 +61,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (currentPanel) {
             currentPanel.reveal(vscode.ViewColumn.Two);
         } else {
+            isWebviewReady = false;
             currentPanel = vscode.window.createWebviewPanel(
                 'pythonDebugPlotter',
                 'Variable Viewer',
@@ -71,12 +73,25 @@ export function activate(context: vscode.ExtensionContext) {
 
                 }
             );
-            currentPanel.webview.html = getWebviewContent(currentPanel.webview, context.extensionUri);
-            
-            currentPanel.onDidDispose(() => {
-                currentPanel = undefined;
-            }, null, context.subscriptions);
+
+            currentPanel.webview.onDidReceiveMessage(
+                    message => {
+                        if (message.command === 'ready') {
+                            isWebviewReady = true;
+                        }
+                    },
+                    undefined,
+                    context.subscriptions
+                );
+
+                currentPanel.onDidDispose(() => {
+                    currentPanel = undefined;
+                    isWebviewReady = false;
+                }, null, context.subscriptions);
+
+                currentPanel.webview.html = getWebviewContent(currentPanel.webview, context.extensionUri);
         }
+     
 
         const scriptPath = path.join(context.extensionPath, 'python', 'data_handler.py');
         const scriptContent = fs.readFileSync(scriptPath, 'utf-8');
@@ -123,7 +138,30 @@ export function activate(context: vscode.ExtensionContext) {
 
                         // Send to Webview
                         if (currentPanel) {
-                            currentPanel.webview.postMessage(finalData);
+                            if (isWebviewReady) {
+                                // Scenario A: Panel was already open or loaded very fast. Send immediately.
+                                currentPanel.webview.postMessage(finalData);
+                            } else {
+                                // Scenario B: Panel is still parsing Plotly. Wait for the handshake.
+                                // We attach a temporary listener specifically for this data packet.
+                                let hasHandled = false;
+                                const disposableListener = currentPanel.webview.onDidReceiveMessage(message => {
+                                    if (message.command === 'ready') {
+                                        if (!hasHandled && currentPanel) {
+                                            currentPanel?.webview.postMessage(finalData);
+                                            hasHandled = true;
+                                        }
+                                        disposableListener.dispose(); // Cleanup this one-time listener
+                                    }
+                                });
+                                // If the user closes the panel BEFORE 'ready' arrives, 
+                                // we must kill this listener to prevent leaks.
+                                // We attach this disposal logic to the panel's own disposal.
+                                const cleanupListener = currentPanel.onDidDispose(() => {
+                                    disposableListener.dispose();
+                                    cleanupListener.dispose();
+                                });
+                            }
                         }
                     } finally {
                         if (fs.existsSync(pathData.file_path)) {
