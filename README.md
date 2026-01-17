@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icon.png" width="100" alt="Python Debug Plotter Icon">
+  <img src="assets/icon.png" width="128" alt="Python Debug Plotter Icon">
 </p>
 
 <h1 align="center">Python Debug Plotter</h1>
@@ -13,10 +13,6 @@
   <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python Version">
   <img src="https://img.shields.io/github/last-commit/chcomin/vscode-python-debug-plotter?color=green" alt="Last Commit">
   <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
-</p>
-
-<p align="center">
-  <a href="vscode:extension/inag-ufscar.python-debug-plotter">Install directly in VS Code</a>
 </p>
 
 <p align="center">
