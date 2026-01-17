@@ -26,7 +26,7 @@
 
 ## Features
 
-View 2D single and three channel arrays as images, Nx2 and Nx3 arrays as point clouds, networkx graphs and 1D arrays as histograms.
+View 2D single and three channel arrays as images, Nx2 and Nx3 arrays as point clouds, networkx graphs as interactive 3D plots and 1D arrays as histograms.
 
 ![Histogram viewer](https://raw.githubusercontent.com/chcomin/vscode-python-debug-plotter/main/assets/showcase1.gif)
 
