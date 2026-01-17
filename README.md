@@ -1,10 +1,36 @@
-# VSCode Python Debug Plotter
+<p align="center">
+  <img src="assets/icon.png" width="100" alt="Python Debug Plotter Icon">
+</p>
 
-A lightweight VS Code extension for visualizing NumPy arrays, PyTorch tensors and graphs during Python debugging sessions. Dependencies are not required!
+<h1 align="center">Python Debug Plotter</h1>
+
+<p align="center">
+  <strong>Visualize NumPy, PyTorch, and Graphs while debugging — no extra dependencies required.</strong>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/VS_Code-1.100+-007ACC?logo=visual-studio-code&logoColor=white" alt="VS Code Version">
+  <img src="https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white" alt="Python Version">
+  <img src="https://img.shields.io/github/last-commit/chcomin/vscode-python-debug-plotter?color=green" alt="Last Commit">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
+</p>
+
+<p align="center">
+  <a href="vscode:extension/inag-ufscar.python-debug-plotter">Install directly in VS Code</a>
+</p>
+
+<p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=inag-ufscar.python-debug-plotter">
+    <img src="https://img.shields.io/badge/Marketplace-Install-blue?style=for-the-badge&logo=visual-studio-code" alt="Marketplace">
+  </a>
+  <a href="https://github.com/chcomin/vscode-python-debug-plotter">
+    <img src="https://img.shields.io/badge/GitHub-Repository-black?style=for-the-badge&logo=github" alt="GitHub">
+  </a>
+</p>
 
 ## Features
 
-View 2D single and three channel arrays as images, Nx2 and Nx3 arrays as point clouds, networkx graphs and 1D arrays as hisograms.
+View 2D single and three channel arrays as images, Nx2 and Nx3 arrays as point clouds, networkx graphs and 1D arrays as histograms.
 
 ![Histogram viewer](https://raw.githubusercontent.com/chcomin/vscode-python-debug-plotter/main/assets/showcase1.gif)
 
@@ -26,20 +52,6 @@ Compound data that cannot be plotted is printed with rich information. For insta
 - VS Code 1.96.0 or higher
 - Python debugger session active
 
-## Installation
-
-1. Download the .vsix file from the [Releases page](https://github.com/chcomin/vscode-python-debug-plotter/releases) or use wget
-
-```bash
-wget https://github.com/chcomin/vscode-python-debug-plotter/releases/download/v0.0.1/vscode-python-debug-plotter-0.0.1.vsix
-```
-
-2. In the Extensions VSCode panel, click on the three dots on the upper right corner and then on "Install from VSIX", or install from the terminal
-
-```bash
-code --install-extension vscode-python-debug-plotter-0.0.1.vsix
-```
-
 ## Usage
 
 1. Start a Python debugging session
@@ -50,41 +62,20 @@ code --install-extension vscode-python-debug-plotter-0.0.1.vsix
 
 ## Supported Variable Types
 
-The full heuristic for automatically detecting and handling each data type is the following:
+The extension uses a smart heuristic to automatically detect the best visualization for your data.
 
-* **Histogram**: If `np_array.squeeze().ndim == 1`. Warning! NaNs ans infs are converted to 0 since they cannot be plotted.
-* **Point cloud**: If `np_array.ndim == 2 and np_array.shape[1] in [2, 3]`
-* **Image**: If `np_array.ndim == 2 and np_array.shape[1] >= 4` or `np_array.ndim == 3` and `D0 > 4 and D1 > 4 and D2 in [1, 3, 4]` (channels last) or `D0 in [1, 3, 4] and D1 > 4 and D2 > 4` (channel first)
-* **Graph**: If `hasattr(variable, "nodes") and hasattr(variable, "edges")`. Each variable.node must have a `['pos', 'position', 'coord', 'coordinates', 'xy', 'loc']` key, otherwise networkx is needed for calculating node positions.
-* If a Pytorch tensor, `variable.detach().cpu().numpy()` is used to avoid errors.
-* Any variable that supports `np.asarray(variable)` or `variable.numpy()` is converted to a numpy array. So, pillow images and Tensorflow tensors are supported.
-* Everything else is displayed as a string.
+| **TYPE** | **DETECTION LOGIC** | **SPECIAL NOTES** |
+| :--- | :--- | :--- |
+| **Histogram** | `ndim == 1` | NaNs and Infs are converted to `0`. |
+| **Point Cloud** | `ndim == 2` AND `shape[1]` is `2` or `3` | Supports 2D (XY) and 3D (XYZ) coordinates. |
+| **Image** | `ndim == 2` (width ≥ 4) OR `ndim == 3` | Supports Channels First/Last and 1, 3, or 4 channels. |
+| **Graph** | Has `.nodes` and `.edges` | Looks for `pos`, `coord`, or `xy` keys for node layout. |
+| **PyTorch** | Checks for `detach` and `cpu` attributes | Automatically calls `.detach().cpu().numpy()`. |
+| **Generic** | Supports `np.asarray()` or `.numpy()` | Seamlessly handles **Pillow** images and **Tensorflow** tensors. |
+| **Text** | Anything else | Fallback to a rich string representation. |
 
-## Release Notes
+> **Note on Graphs:** If no coordinate information is found in the node data, the extension will attempt to use NetworkX for automatic layout calculation if available in the environment.
 
-### 1.0
+## Change Log
 
-First full release
-
-- Fixed rouding errors in the image tooltip
-- Significantly improved the appearance of the plots
-- Significantly improved the performance
-- Many bug fixes
-
-### 0.0.2
-
-Second beta release
-
-- View 1D arrays as histogram
-- View complex nested lists as a string with rich information
-- Some optimizations to reduce extension size
-
-### 0.0.1
-
-Initial beta release
-
-- View PyTorch tensors during debugging
-- View NumPy arrays during debugging
-- View NetworkX graphs during debugging
-- Right-click context menu in Variables panel
-
+See [CHANGELOG.md](./CHANGELOG.md) for full release history.
