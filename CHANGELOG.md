@@ -1,16 +1,26 @@
 # Change Log
 
-All notable changes to the "Simple Data Viewer" extension will be documented in this file.
+## 1.0
 
-The format is based on [Keep a Changelog](http://keepachangelog.com/).
+First full release
 
-## [0.0.1] - 2026-01-13
+- Significantly improved the appearance of the plots
+- Significantly improved the performance
+- Many bug fixes
 
-### Added
-- Initial release
-- View PyTorch tensors during Python debugging sessions
-- View NumPy arrays during Python debugging sessions
-- View NetworkX graphs during Python debugging sessions
-- Right-click context menu in Variables panel for quick access
-- Interactive webview visualization panel
-- Zero Python dependencies beyond the visualized libraries
+## 0.0.2
+
+Second beta release
+
+- View 1D arrays as histogram
+- View complex nested lists as a string with rich information
+- Some optimizations to reduce extension size
+
+## 0.0.1
+
+Initial beta release
+
+- View PyTorch tensors during debugging
+- View NumPy arrays during debugging
+- View NetworkX graphs during debugging
+- Right-click context menu in Variables panel

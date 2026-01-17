@@ -1,16 +1,16 @@
 # VSCode Python Debug Plotter
 
-A lightweight VS Code extension for visualizing 1D and 2D NumPy arrays and PyTorch tensors during Python debugging sessions. It also supports variables that can be converted to a NumPy array (e.g. a list of points) and NetworkX graphs. Networkx, Pytorch or other dependencies are not required!
+A lightweight VS Code extension for visualizing NumPy arrays, PyTorch tensors and graphs during Python debugging sessions. Dependencies are not required!
 
 ## Features
 
-View 2D single and three channel arrays as images, Nx2 and Nx3 arrays as point clouds, networkx graphs and 1D arrays as hisograms
+View 2D single and three channel arrays as images, Nx2 and Nx3 arrays as point clouds, networkx graphs and 1D arrays as hisograms.
 
 ![Histogram viewer](https://raw.githubusercontent.com/chcomin/vscode-python-debug-plotter/main/assets/showcase1.gif)
 
 <br>
 
-You can explore any ND tensor or array. For instance, an image in a Bx3xHxW tensor can be shown by first defining the variable in the debug console using `img = batch[7]`. The variable can then be viewed as an image
+You can explore any ND array or tensor by first creating one of the primitives above in the debug console. A Bx3xHxW tensor can be shown by first typing `img = batch[4]` and then plotting the image.
 
 ![Batch viewer](https://raw.githubusercontent.com/chcomin/vscode-python-debug-plotter/main/assets/showcase2.gif)
 
@@ -18,7 +18,7 @@ You can explore any ND tensor or array. For instance, an image in a Bx3xHxW tens
 
 Compound data that cannot be plotted is printed with rich information. For instance, a list with a torch tensor on the GPU, a dictionary with an array, a tensor and a pillow image and a list of 10 arrays is shown as
 
-![Data viewer](https://github.com/chcomin/vscode-python-debug-plotter/blob/main/assets/compound.png)
+![Data viewer](https://raw.githubusercontent.com/chcomin/vscode-python-debug-plotter/refs/heads/main/assets/compound.png)
 
 
 ## Requirements
@@ -52,45 +52,21 @@ code --install-extension vscode-python-debug-plotter-0.0.1.vsix
 
 The full heuristic for automatically detecting and handling each data type is the following:
 
-```python
-def is_1d_array(np_array):
-    """Check if a numpy array is 1D."""
-    return np_array.squeeze().ndim == 1
+* **Histogram**: If `np_array.squeeze().ndim == 1`. Warning! NaNs ans infs are converted to 0 since they cannot be plotted.
+* **Point cloud**: If `np_array.ndim == 2 and np_array.shape[1] in [2, 3]`
+* **Image**: If `np_array.ndim == 2 and np_array.shape[1] >= 4` or `np_array.ndim == 3` and `D0 > 4 and D1 > 4 and D2 in [1, 3, 4]` (channels last) or `D0 in [1, 3, 4] and D1 > 4 and D2 > 4` (channel first)
+* **Graph**: If `hasattr(variable, "nodes") and hasattr(variable, "edges")`. Each variable.node must have a `['pos', 'position', 'coord', 'coordinates', 'xy', 'loc']` key, otherwise networkx is needed for calculating node positions.
+* If a Pytorch tensor, `variable.detach().cpu().numpy()` is used to avoid errors.
+* Any variable that supports `np.asarray(variable)` or `variable.numpy()` is converted to a numpy array. So, pillow images and Tensorflow tensors are supported.
+* Everything else is displayed as a string.
 
-def is_point_array(np_array):
-    """Check if a numpy array is likely a point cloud."""
-    return np_array.ndim == 2 and np_array.shape[1] in [2, 3]
 
-def is_image_array(np_array):
-    """Check if a numpy array is likely an image."""
-    is_image = False
-    if np_array.ndim == 2 and np_array.shape[1] >= 4:
-        # Not a point cloud (Nx2 or Nx3)
-        is_image = True
-    elif np_array.ndim == 3:
-        D0, D1, D2 = np_array.shape
-        if D0 > 4 and D1 > 4 and D2 in [1, 3, 4]:
-            # Channels last
-            is_image = True
-        elif D0 in [1, 3, 4] and D1 > 4 and D2 > 4:
-            # Channels first
-            is_image = True
-    return is_image
+Array intensity normalization when showing as image
 
-def is_graph_like(variable):
-    """Check if a variable has the attributes nodes and edges."""
-    return hasattr(variable, "nodes") and hasattr(variable, "edges")
-
-### Array intensity normalization for showing as image ###
-
-# If integer with range outside [0, 255], the array requires normalization
-if np_array.dtype.kind == 'i' and (np_array.max() > 255 or np_array.min() < 0):
-    np_array = np_array.astype(np.float32)
-
-# If float, normalize to [0, 255]
-if np_array.dtype.kind == 'f':
-    ...
-```
+* If the dtype of the array is `float`, or `integer` with range outside [0, 255], the array is normalized to [0, 255].
+* If you do not want normalization, convert to integer in the [0, 255] range before visualizing. 
+* The tooltip shows the **original** pixel values, not the normalzied ones.
+* Tip: Binary or label masks may be hard to see. Convert them to float for automatic normalization.
 
 ## Release Notes
 

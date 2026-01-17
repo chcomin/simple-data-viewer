@@ -2,7 +2,7 @@
   "name": "python-debug-plotter",
   "displayName": "Python Debug Plotter: Arrays, Tensors & Graphs",
   "description": "Debug and plot NumPy arrays, PyTorch tensors, images, and NetworkX graphs instantly. Lightweight & dependency-free.",
-  "version": "0.0.2",
+  "version": "1.0.0",
   "publisher": "inag-ufscar",
   "author": {
     "name": "Cesar Comin"
@@ -41,7 +41,6 @@
     "Debuggers",
     "Data Science"
   ],
-  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [

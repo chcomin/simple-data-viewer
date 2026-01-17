@@ -138,38 +138,47 @@ def get_numpy_data(np_array):
         # Heuristic to detect if channel is first
         if C in [1, 3, 4] and H > 4 and W > 4:
             np_array = np_array.transpose((1, 2, 0)) # type: ignore
+
+        # Get raw data for the plot tooltip
+        raw_float_data = np_array.astype(np.float32).tobytes(order='C')
+        raw_b64 = base64.b64encode(raw_float_data).decode('utf-8')
     
-        # Intensity normalization
         # Capture original stats
         orig_min = float(np_array.min())
         orig_max = float(np_array.max())
 
+        # Intensity normalization
+        # In previous versions, integer images with values in the range [0, 255] were 
+        # not normalized. The commented code below contains that logic in case it becomes
+        # necessary to restore it.
         # If integer with range outside [0, 255], the array requires normalization
-        if np_array.dtype.kind == 'i' and (np_array.max() > 255 or np_array.min() < 0):
-            np_array = np_array.astype(np.float32)
+        #if np_array.dtype.kind == 'i' and (np_array.max() > 255 or np_array.min() < 0):
+        #    np_array = np_array.astype(np.float32)
 
         # If float, normalize to [0, 255]
-        if np_array.dtype.kind == 'f':
-            v_min, v_max = np_array.min(), np_array.max()
-            if v_max - v_min > 1e-8: 
-                np_array = (np_array - v_min) / (v_max - v_min) * 255.0
+        #if np_array.dtype.kind == 'f':
+        vis_array = np_array.astype(np.float32)
+
+        if orig_max - orig_min > 1e-8: 
+            vis_array = (vis_array - orig_min) / (orig_max - orig_min) * 255.0
+        else:
+            # Array is constant. 
+            # If val > 0, make it white, else black.
+            if orig_max > 0:
+                vis_array.fill(255.0)
             else:
-                # Array is constant. 
-                # If val > 0, make it white, else black.
-                if v_max > 0:
-                    np_array.fill(255.0)
-                else:
-                    np_array.fill(0.0)
-        np_array = np_array.astype(np.uint8)
+                vis_array.fill(0.0)
+        vis_array = vis_array.astype(np.uint8)
         
-        raw_bytes = np_array.tobytes(order='C')
-        b64_data = base64.b64encode(raw_bytes).decode('utf-8')
+        img_bytes = vis_array.tobytes(order='C')
+        img_b64 = base64.b64encode(img_bytes).decode('utf-8')
         
         output_data = {
             "type": "image",
             "dtype": str(dtype),
             "shape": np_array.shape,
-            "data": b64_data,
+            "data": img_b64,
+            "real_data": raw_b64,
             "orig_min": orig_min,
             "orig_max": orig_max            
         }
@@ -367,9 +376,7 @@ def _vscode_extension_extract_data(variable):
         fd, path = tempfile.mkstemp(suffix='.json', text=True)
         with os.fdopen(fd, 'w') as tmp:
             json.dump(output_data, tmp)
-            
-        # Use json.dumps TWICE to ensure the debugger receives a string 
-        # that serves as a valid JSON string literal.
+
         return json.dumps({"file_path": path})
 
     except Exception as e:

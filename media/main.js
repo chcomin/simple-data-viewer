@@ -1,8 +1,7 @@
-// media/main.js
-
 const vscode = acquireVsCodeApi();
 let initialData = null; 
 
+// Message Handling
 window.addEventListener('message', event => {
     const message = event.data;
     
@@ -10,11 +9,10 @@ window.addEventListener('message', event => {
         document.getElementById('status').textContent = "Error: " + message.error;
         return;
     }
-
-    // Pass directly to the router
     routeMessage(message);
 });
 
+// Handle Window Resize
 window.addEventListener('resize', () => {
     const plotContainer = document.getElementById('plot-container');
     if (plotContainer && plotContainer.data) {
@@ -22,6 +20,7 @@ window.addEventListener('resize', () => {
     }
 });
 
+// Reset Plot Container to avoid residual event listeners/tooltips
 function resetPlotContainer() {
     const tooltip = document.getElementById('custom-tooltip');
     if (tooltip) {
@@ -36,7 +35,7 @@ function resetPlotContainer() {
     }
 }
 
-// 2. Logic to handle the data once Plotly is ready
+// Logic to handle the data message and route to appropriate renderer
 function routeMessage(msg) {
 
     document.getElementById('status').textContent = "Rendering...";
@@ -87,23 +86,36 @@ function renderImage(msg) {
 
     const h = msg.shape[0];
     const w = msg.shape[1];
+    const dtype = msg.dtype;
     const channels = msg.shape.length > 2 ? msg.shape[2] : 1;
     
     const vMin = msg.orig_min !== undefined ? msg.orig_min : 0;
     const vMax = msg.orig_max !== undefined ? msg.orig_max : 255;
-    const range = vMax - vMin;
+    //const range = vMax - vMin;
 
-    status.textContent = `Image: ${msg.dtype} [${w}x${h}x${channels}], min: ${fmt(vMin)}, max: ${fmt(vMax)}`;
+    status.textContent = `Image: ${dtype} [${w}x${h}x${channels}], min: ${fmt(vMin, dtype)}, max: ${fmt(vMax, dtype)}`;
 
-    // 1. Prepare Flat Data for Fast Lookup
-    const cleanB64 = msg.data.replace(/[^A-Za-z0-9+/=]/g, "");
-    const rawString = atob(cleanB64);
-    const bytes = new Uint8Array(rawString.length);
-    for (let i = 0; i < rawString.length; i++) {
-        bytes[i] = rawString.charCodeAt(i);
+    // Decode Visual Data (Uint8) for Display
+    const cleanVisB64 = msg.data.replace(/[^A-Za-z0-9+/=]/g, "");
+    const visString = atob(cleanVisB64);
+    const visBytes = new Uint8Array(visString.length);
+    for (let i = 0; i < visString.length; i++) {
+        visBytes[i] = visString.charCodeAt(i);
     }
 
-    // 2. Create Layout Image Source (Canvas)
+    // Decode Real Data (Float32) for Tooltip
+    const cleanRealB64 = msg.real_data.replace(/[^A-Za-z0-9+/=]/g, "");
+    const realString = atob(cleanRealB64);
+    
+    // We need to convert the binary string into a buffer, then a Float32Array
+    const realBuffer = new Uint8Array(realString.length);
+    for (let i = 0; i < realString.length; i++) {
+        realBuffer[i] = realString.charCodeAt(i);
+    }
+    // Create a view on the buffer
+    const realValues = new Float32Array(realBuffer.buffer);    
+
+    // Create Layout Image Source (Canvas)
     const canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
@@ -114,10 +126,16 @@ function renderImage(msg) {
         const tIdx = i * 4; 
         const sIdx = i * channels;
         if (channels === 1) {
-            const val = bytes[sIdx];
-            imgData.data[tIdx] = val; imgData.data[tIdx+1] = val; imgData.data[tIdx+2] = val; imgData.data[tIdx+3] = 255;
+            const val = visBytes[sIdx];
+            imgData.data[tIdx] = val; 
+            imgData.data[tIdx+1] = val; 
+            imgData.data[tIdx+2] = val; 
+            imgData.data[tIdx+3] = 255;
         } else {
-            imgData.data[tIdx] = bytes[sIdx]; imgData.data[tIdx+1] = bytes[sIdx+1]; imgData.data[tIdx+2] = bytes[sIdx+2]; imgData.data[tIdx+3] = 255;
+            imgData.data[tIdx] = visBytes[sIdx]; 
+            imgData.data[tIdx+1] = visBytes[sIdx+1]; 
+            imgData.data[tIdx+2] = visBytes[sIdx+2];
+            imgData.data[tIdx+3] = 255;
         }
     }
     ctx.putImageData(imgData, 0, 0);
@@ -126,10 +144,8 @@ function renderImage(msg) {
     // 3. Setup Plotly Layout
     const layout = {
         margin: { t: 0, l: 0, r: 0, b: 0 },
-        //xaxis: { range: [0, w], showgrid: false, zeroline: false, side: 'top' },
         xaxis: { visible: false,  range: [0, w] },        
         // Note: range [h, 0] sets 'h' at the visual bottom, '0' at top
-        //yaxis: { range: [h, 0], showgrid: false, zeroline: false, scaleanchor: 'x' },
         yaxis: { visible: false, range: [h, 0],  scaleanchor: 'x' },
         images: [{
             source: imageSource,
@@ -156,7 +172,6 @@ function renderImage(msg) {
         
         // 4. Robust Mouse Event Listener
         gd.addEventListener('mousemove', function(evt) {
-            // Get the bounding rectangle of the container
             const rect = gd.getBoundingClientRect();
             
             // Access Plotly's calculated internal layout details
@@ -198,20 +213,15 @@ function renderImage(msg) {
             // Bounds Check (Data Space)
             if (xIndex >= 0 && xIndex < w && yIndex >= 0 && yIndex < h) {
                 const fileIdx = (yIndex * w + xIndex) * channels;
-                let text = `<b>x:</b> ${xIndex} <b>y:</b> ${yIndex}<br><b>Val:</b> `;
+                let text = `<b>r:</b> ${yIndex} <b>c:</b> ${xIndex}<br><b>Val:</b> `;
 
                 if (channels === 1) {
-                    const rawVal = bytes[fileIdx];
-                    const valNorm = rawVal / 255.0;
-                    const originalVal = (valNorm * range) + vMin;
-                    text += fmt(originalVal);
+                    const val = realValues[fileIdx]; 
+                    text += fmt(val, dtype);
                 } else {
                     const vals = [];
                     for(let c=0; c<channels; c++) {
-                        const rawVal = bytes[fileIdx+c];
-                        const valNorm = rawVal / 255.0;
-                        const originalVal = (valNorm * range) + vMin;
-                        vals.push(fmt(originalVal));
+                        vals.push(fmt(realValues[fileIdx+c], dtype));
                     }
                     text += `(${vals.join(', ')})`;
                 }
@@ -457,41 +467,17 @@ function renderGraphCommon(msg, is3D) {
 const fmt = (n) => {
   const abs = Math.abs(n);
   
-  if (n === 0) {return "0.000";}
+  if (n === 0) {return "0";}
 
-  if (abs < 0.001 || abs > 1000) {
-    return n.toExponential(3); // Scientific notation with 3 decimals
+  if (abs < 1e-4 || abs >= 1e6) {
+    return n.toExponential(2); 
+  }
+
+  // If the number is within 0.0001 of an integer, format it as an integer.
+  if (Math.abs(n % 1) < 0.0001 || Math.abs(n % 1) > 0.9999) {
+    return n.toFixed(0);
   }
 
   return n.toFixed(3);
 };
-
-
-
-// 4. Initialization Loop
-// Check every 50ms if Plotly has finished loading from the CDN
-// This function was needed when Plotly was not bundled with the extension.
-// let attempts = 0;
-// function checkPlotly() {
-//     if (typeof Plotly !== 'undefined') {
-//         isPlotlyLoaded = true;
-//         if (initialData) {
-//             routeMessage(initialData);
-//             initialData = null;
-//         }
-//         window.addEventListener('resize', () => {
-//             Plotly.Plots.resize(document.getElementById('plot-container'));
-//         });
-//     } else {
-//         attempts++;
-//         if (attempts > 200) { // 10 seconds timeout
-//             document.getElementById('status').textContent = 
-//                 "Error: Plotly.js failed to load from CDN. Check internet connection.";
-//             return;
-//         }
-//         setTimeout(checkPlotly, 50);
-//     }
-// }
-// checkPlotly();
-
 vscode.postMessage({ command: 'ready' });

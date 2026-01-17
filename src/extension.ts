@@ -29,7 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Case A: Triggered from Right-Click in Variables View
         if (variableContext) {
-            // Check 1: Is it the VS Code wrapper? (Common in newer versions)
+            // Check 1: Is it the VS Code wrapper?
             if (variableContext.variable && variableContext.variable.evaluateName) {
                 variableName = variableContext.variable.evaluateName;
             }
@@ -100,7 +100,7 @@ export function activate(context: vscode.ExtensionContext) {
         let response: any; 
 
         try {
-            //const pythonOneLiner = `[exec(__import__('base64').b64decode('${scriptB64}').decode('utf-8')), _vscode_extension_extract_data(${variableName})][-1]`;
+            // Construct the Python code to execute
             const pythonOneLiner = `(lambda d: [exec(__import__('base64').b64decode('${scriptB64}').decode('utf-8'), d), d['_vscode_extension_extract_data'](${variableName})][-1])({})`;
 
             response = await session.customRequest('evaluate', {
@@ -116,7 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
             if (rawResult.startsWith("'") && rawResult.endsWith("'")) {
                 rawResult = rawResult.slice(1, -1);
             } else if (rawResult.startsWith('"') && rawResult.endsWith('"')) {
-                // Rare case: if the inner string had single quotes, python might use double quotes outside
+                // If the inner string had single quotes, python might use double quotes outside
                 rawResult = rawResult.slice(1, -1);
             }
 
@@ -131,10 +131,8 @@ export function activate(context: vscode.ExtensionContext) {
 
                 if (pathData.file_path) {
                     try {
-                        // Read the actual data from the temp file
+                        // Read the data from the temp file
                         const jsonContent = fs.readFileSync(pathData.file_path, 'utf-8');
-                        
-                        // Parse the data
                         const finalData = JSON.parse(jsonContent);
 
                         // Send to Webview
